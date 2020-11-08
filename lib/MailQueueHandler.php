@@ -34,6 +34,7 @@ use OCP\ILogger;
 use OCP\IURLGenerator;
 use OCP\IUser;
 use OCP\IUserManager;
+use OCP\IL10N;
 use OCP\L10N\IFactory;
 use OCP\Mail\IMailer;
 use OCP\RichObjectStrings\InvalidObjectExeption;
@@ -334,6 +335,7 @@ class MailQueueHandler {
 
 		$l = $this->getLanguage($lang);
 		$this->activityManager->setCurrentUserId($userName);
+		$datetimezone = new \DateTimeZone($timezone);
 
 		$activityEvents = [];
 		foreach ($mailData as $activity) {
@@ -352,7 +354,7 @@ class MailQueueHandler {
 			$relativeDateTime = $this->dateFormatter->formatDateTimeRelativeDay(
 				(int) $activity['amq_timestamp'],
 				'long', 'short',
-				new \DateTimeZone($timezone), $l
+				$datetimezone, $l
 			);
 
 			try {
@@ -388,7 +390,7 @@ class MailQueueHandler {
 			$event = $activity['event'];
 			$relativeDateTime = $activity['relativeDateTime'];
 
-			$template->addBodyListItem($this->getHTMLSubject($event), $relativeDateTime, $event->getIcon(), $event->getParsedSubject());
+			$template->addBodyListItem($this->getHTMLSubject($event, $datetimezone, $l), $relativeDateTime, $event->getIcon(), $event->getParsedSubject());
 		}
 
 		if ($skippedCount) {
@@ -416,7 +418,7 @@ class MailQueueHandler {
 	 * @param IEvent $event
 	 * @return string
 	 */
-	protected function getHTMLSubject(IEvent $event): string {
+	protected function getHTMLSubject(IEvent $event, \DateTimeZone $datetimezone, IL10N $l): string {
 		if ($event->getRichSubject() === '') {
 			return htmlspecialchars($event->getParsedSubject());
 		}
@@ -427,9 +429,17 @@ class MailQueueHandler {
 
 			if ($parameter['type'] === 'file') {
 				$replacement = $parameter['path'];
+			} elseif (isset($parameter['firstoccurrence'])) {
+				$firstOccurrence = $this->dateFormatter->formatDateTimeRelativeDay(
+					$parameter['firstoccurrence'],
+					'long', 'short',
+					$datetimezone, $l
+				);
+				$replacement = $parameter['name'] . " ($firstOccurrence)";
 			} else {
 				$replacement = $parameter['name'];
 			}
+
 
 			if (isset($parameter['link'])) {
 				$replacements[] = '<a href="' . $parameter['link'] . '">' . htmlspecialchars($replacement) . '</a>';
